@@ -10,13 +10,15 @@ export const loopPodQueue = createAsyncThunk(
   "loopPodQueue",
   async (action, { dispatch, getState }) => {
     // process action, push to remote server
-    const repoId = getState().repo.repoId;
+    const reponame = getState().repo.reponame;
+    const username = getState().repo.username;
     switch (action.type) {
       case repoSlice.actions.addPod.type: {
         // push to remote
         let { parent, index } = action.payload;
         return await doRemoteAddPod({
-          repoId,
+          reponame,
+          username,
           parent,
           index,
           pod: action.payload,
@@ -26,12 +28,12 @@ export const loopPodQueue = createAsyncThunk(
       case repoSlice.actions.deletePod.type: {
         const { id, toDelete } = action.payload;
         // delete pod id
-        return await doRemoteDeletePod({ id, toDelete });
+        return await doRemoteDeletePod({ id, toDelete, reponame, username });
       }
 
       case "REMOTE_PASTE":
         {
-          return await doRemotePastePod({ repoId, ...action.payload });
+          return await doRemotePastePod({ reponame, ...action.payload });
         }
         break;
 

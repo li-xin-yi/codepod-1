@@ -50,7 +50,12 @@ import { v4 as uuidv4 } from "uuid";
 import * as Diff2Html from "diff2html";
 import "diff2html/bundles/css/diff2html.min.css";
 
-import { repoSlice, remoteUpdatePod, selectIsDirty } from "../../lib/store";
+import {
+  repoSlice,
+  loadPodQueue,
+  remoteUpdatePod,
+  selectIsDirty,
+} from "../../lib/store";
 import * as wsActions from "../../lib/ws/actions";
 import * as qActions from "../../lib/queue/actions";
 
@@ -802,7 +807,7 @@ export function HoveringMenu({ pod, showMenu, draghandle, children }) {
           </HStack>
           <HStack my={2}>
             <InfoBar pod={pod} />
-            {pod.type !== "DECK" && <TypeMenu pod={pod} />}
+            <TypeMenu pod={pod} />
             <LanguageMenu pod={pod} />
             <Button
               size="small"
@@ -854,7 +859,7 @@ export function ExportList({ pod }) {
                 my: 0,
               }}
             >
-              Exports: <Code>{k}</Code>: use: <Code>{v}</Code>
+              Exports: <Code>{k}</Code>: use: <Code>{v.join(",")}</Code>
             </Box>
           ))}
         </Box>

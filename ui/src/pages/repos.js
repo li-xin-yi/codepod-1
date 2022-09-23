@@ -52,10 +52,7 @@ function Repos() {
   if (error) return <Alert severity="error">{error.message}</Alert>;
   let repos = data.myRepos.slice().reverse();
   return (
-    <Box sx={{ pt: 4 }}>
-      <Box>
-        Hello, {me?.firstname}! Your ID: {me?.id}
-      </Box>
+    <Box>
       <CreateRepoForm />
       <Typography variant="h2" gutterBottom component="div">
         Your repos {repos.length}:
@@ -65,8 +62,8 @@ function Repos() {
           The link:{" "}
           <Link
             component={ReactLink}
-            to={`/repo/${repo.id}`}
-          >{`${repo.name}`}</Link>
+            to={`/${me?.username}/${repo.name}`}
+          >{`/${me?.username}/${repo.name}`}</Link>
           <Button
             size="xs"
             sx={{
@@ -93,9 +90,7 @@ function CreateRepoForm(props) {
   const [createRepo, {}] = useMutation(
     gql`
       mutation CreateRepo($name: String!) {
-        createRepo(name: $name) {
-          name
-        }
+        createRepo(name: $name)
       }
     `,
     {
