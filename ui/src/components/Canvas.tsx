@@ -33,6 +33,9 @@ import Stack from "@mui/material/Stack";
 import Button from "@mui/material/Button";
 import CircleIcon from "@mui/icons-material/Circle";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import copy from "copy-to-clipboard";
+
 import Grid from "@mui/material/Grid";
 import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -594,6 +597,31 @@ const CodeNode = memo<Props>(({ data, id, isConnectable, selected }) => {
               </IconButton>
             </Tooltip>
           )}
+          <Tooltip title="Copy">
+            <IconButton
+              size="small"
+              onClick={async () => {
+                const type = "web text/plain";
+                const v = new ClipboardItem({
+                  [type]: new Blob(
+                    [JSON.stringify({ data: "I am pusheen the cat" })],
+                    { type: "text/plain" }
+                  ),
+                  ["text/plain"]: new Blob(["1"], { type: "text/plain" }),
+                });
+                console.log("clipbord", navigator.clipboard, v);
+                navigator.clipboard.write([v]);
+                // copy("", {
+                //   onCopy: (e: Clipboard) => {
+                //     // e.setData("text/plain", "1");
+                //     console.log("copied", e);
+                //   },
+                // });
+              }}
+            >
+              <ContentCopyIcon fontSize="inherit" />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Change layout">
             <IconButton
               size="small"
@@ -999,8 +1027,32 @@ export function Canvas() {
 
   useEffect(() => {
     const handleClick = () => setShowContextMenu(false);
+    const pasteHandle = async (e) => {
+      console.log(e.clipboardData.getData("web text/plain"));
+      const clipboardItems = await navigator?.clipboard?.read();
+      if (!clipboardItems) return;
+      const text = clipboardItems[0].getType("web text/plain");
+      console.log("clipboardItems", text);
+      for (const clipboardItem of clipboardItems) {
+        for (const type of clipboardItem.types) {
+          // Discard any types that are not web custom formats.
+          if (!type.startsWith("web ")) {
+            continue;
+          }
+          const blob = await clipboardItem.getType(type);
+          console.log(await blob.text(), type);
+          // Sanitize the blob if you need to, then process it in your app.
+        }
+      }
+    };
     document.addEventListener("click", handleClick);
-    return () => document.removeEventListener("click", handleClick);
+    document.addEventListener("paste", pasteHandle);
+    // const text = e.clipboardData?.getData("web pod");
+    // console.log("pasted text:", text);
+    return () => {
+      document.removeEventListener("click", handleClick);
+      document.removeEventListener("paste", pasteHandle);
+    };
   }, []);
 
   return (
