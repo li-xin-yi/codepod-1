@@ -398,8 +398,9 @@ export const MyMonaco = memo<MyMonacoProps>(function MyMonaco({
   const annotations = useStore(store, (state) => state.pods[id]?.annotations);
   const showAnnotations = useStore(store, (state) => state.showAnnotations);
   const scopedVars = useStore(store, (state) => state.scopedVars);
+  const updateView = useStore(store, (state) => state.updateView);
 
-  const value = getPod(id).content || "";
+  const value = getPod(id)?.content || "";
   let lang = getPod(id).lang || "javascript";
   const onChange = (value) => setPodContent({ id, content: value });
   let [editor, setEditor] =
@@ -431,7 +432,6 @@ export const MyMonaco = memo<MyMonacoProps>(function MyMonaco({
   const awareness = provider?.awareness;
 
   const resetSelection = useStore(store, (state) => state.resetSelection);
-  const updateView = useStore(store, (state) => state.updateView);
 
   function onEditorDidMount(
     editor: monaco.editor.IStandaloneCodeEditor,
@@ -462,7 +462,6 @@ export const MyMonaco = memo<MyMonacoProps>(function MyMonaco({
     });
     editor.onDidFocusEditorText(() => {
       setPodFocus(id);
-
       if (resetSelection()) updateView();
       setCurrentEditor(id);
     });
