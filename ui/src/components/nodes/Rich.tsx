@@ -163,6 +163,7 @@ const MyEditor = ({
   const setPodFocus = useStore(store, (state) => state.setPodFocus);
   const setPodBlur = useStore(store, (state) => state.setPodBlur);
   const resetSelection = useStore(store, (state) => state.resetSelection);
+  const updateView = useStore(store, (state) => state.updateView);
   const isPodFocused = useStore(store, (state) => state.pods[id]?.focus);
   const ref = useRef<HTMLDivElement>(null);
   const { manager, state, setState } = useRemirror({
@@ -216,7 +217,7 @@ const MyEditor = ({
       className="remirror-theme"
       onFocus={() => {
         // FIXME: it's a dummy update in nodesMap to trigger the local update to clear all selection
-        if (resetSelection()) nodesMap.set(id, nodesMap.get(id) as Node);
+        if (resetSelection()) updateView();
         setPodFocus(id);
       }}
       onBlur={() => {
@@ -307,25 +308,40 @@ export const RichNode = memo<Props>(function ({
   // const pod = useStore(store, (state) => state.pods[id]);
   const setPodName = useStore(store, (state) => state.setPodName);
   const getPod = useStore(store, (state) => state.getPod);
+  const setPodGeo = useStore(store, (state) => state.setPodGeo);
   const pod = getPod(id);
   const isGuest = useStore(store, (state) => state.role === "GUEST");
   const width = useStore(store, (state) => state.pods[id]?.width);
   const isPodFocused = useStore(store, (state) => state.pods[id]?.focus);
-  const index = useStore(
-    store,
-    (state) => state.pods[id]?.result?.count || " "
-  );
+
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const onResize = useCallback((e, data) => {
-    const { size } = data;
-    const node = nodesMap.get(id);
-    if (node) {
-      node.style = { ...node.style, width: size.width };
-      nodesMap.set(id, node);
-    }
-  }, []);
+  const updateView = useStore(store, (state) => state.updateView);
   const nodesMap = useStore(store, (state) => state.ydoc.getMap<Node>("pods"));
+
+  const onResize = useCallback(
+    (e, data) => {
+      const { size } = data;
+      const node = nodesMap.get(id);
+      if (node) {
+        node.style = { ...node.style, width: size.width };
+        nodesMap.set(id, node);
+        setPodGeo(
+          id,
+          {
+            parent: node.parentNode ? node.parentNode : "ROOT",
+            x: node.position.x,
+            y: node.position.y,
+            width: size.width!,
+            height: node.height!,
+          },
+          true
+        );
+        updateView();
+      }
+    },
+    [id, nodesMap, setPodGeo, updateView]
+  );
 
   useEffect(() => {
     if (!data.name) return;

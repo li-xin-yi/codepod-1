@@ -395,7 +395,7 @@ export const MyMonaco = memo<MyMonacoProps>(function MyMonaco({
   const setPodFocus = useStore(store, (state) => state.setPodFocus);
   const setPodBlur = useStore(store, (state) => state.setPodBlur);
   const nodesMap = useStore(store, (state) => state.ydoc.getMap<Node>("pods"));
-  const annotations = useStore(store, (state) => state.pods[id].annotations);
+  const annotations = useStore(store, (state) => state.pods[id]?.annotations);
   const showAnnotations = useStore(store, (state) => state.showAnnotations);
   const scopedVars = useStore(store, (state) => state.scopedVars);
 
@@ -431,6 +431,7 @@ export const MyMonaco = memo<MyMonacoProps>(function MyMonaco({
   const awareness = provider?.awareness;
 
   const resetSelection = useStore(store, (state) => state.resetSelection);
+  const updateView = useStore(store, (state) => state.updateView);
 
   function onEditorDidMount(
     editor: monaco.editor.IStandaloneCodeEditor,
@@ -462,8 +463,7 @@ export const MyMonaco = memo<MyMonacoProps>(function MyMonaco({
     editor.onDidFocusEditorText(() => {
       setPodFocus(id);
 
-      // FIXME: this is ugly, but useReactFlow.setNodes doesn't work to reset the selection
-      if (resetSelection()) nodesMap.set(id, nodesMap.get(id) as Node);
+      if (resetSelection()) updateView();
       setCurrentEditor(id);
     });
     editor.onDidContentSizeChange(updateHeight);
