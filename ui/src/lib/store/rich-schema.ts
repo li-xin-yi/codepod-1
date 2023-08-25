@@ -1,3 +1,5 @@
+import { MarkdownSerializer } from "prosemirror-markdown";
+
 const spec = {
   nodes: {
     tableControllerCell: {
@@ -311,5 +313,6 @@ const spec = {
     },
   },
 };
+
 
 export default spec;

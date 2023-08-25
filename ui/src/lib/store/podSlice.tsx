@@ -30,6 +30,7 @@ export interface PodSlice {
   setPodStdout: ({ id, stdout }: { id: string; stdout: string }) => void;
   setPodError: ({ id, ename, evalue, stacktrace }) => void;
   setPodStatus: ({ id, status, lang }) => void;
+  addPodResult: (id, result: PodResult) => void;
 }
 
 export const createPodSlice: StateCreator<MyState, [], [], PodSlice> = (
@@ -131,4 +132,13 @@ export const createPodSlice: StateCreator<MyState, [], [], PodSlice> = (
       })
     );
   },
+  addPodResult(id, result) {
+  // only use to add pod results from external (import file, paste)
+    set(
+      produce((state: MyState) => {
+        // new id should be allowed, yjs node may be added later
+        state.podResults[id] = result;
+      })
+    );
+  }
 });

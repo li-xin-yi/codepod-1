@@ -12,6 +12,10 @@ import { useCallback, useEffect, useState, useContext } from "react";
 import { useStore } from "zustand";
 import { ApolloClient, useApolloClient, gql } from "@apollo/client";
 import { Transaction, YEvent } from "yjs";
+import {
+  MarkdownSerializer,
+  defaultMarkdownSerializer,
+} from "prosemirror-markdown";
 
 import { match, P } from "ts-pattern";
 
@@ -51,13 +55,146 @@ import {
 import { node } from "prop-types";
 import { quadtree } from "d3-quadtree";
 import { getHelperLines, level2fontsize } from "../../components/nodes/utils";
-import { json2yxml, yxml2json } from "./y-utils";
-
+import { json2yxml, yxml2json, yxml2node } from "./y-utils";
+import { codeNodeToCell, richNodeToCell, nodesToCells } from "../format-parse";
+import { DefaultSerializer } from "v8";
+import { stringify } from "querystring";
 // TODO add node's data typing.
 export type NodeData = {
   level: number;
   name?: string;
 };
+
+// const serializer = new MarkdownSerializer(
+//   {
+//     blockquote(state, node) {
+//       state.wrapBlock("> ", null, node, () => state.renderContent(node));
+//     },
+//     code_block(state, node) {
+//       state.write("```" + (node.attrs.params || "") + "\n");
+//       state.text(node.textContent, false);
+//       state.ensureNewLine();
+//       state.write("```");
+//       state.closeBlock(node);
+//     },
+//     heading(state, node) {
+//       state.write(state.repeat("#", node.attrs.level) + " ");
+//       state.renderInline(node);
+//       state.closeBlock(node);
+//     },
+//     horizontal_rule(state, node) {
+//       state.write(node.attrs.markup || "---");
+//       state.closeBlock(node);
+//     },
+//     bullet_list(state, node) {
+//       state.renderList(node, "  ", () => (node.attrs.bullet || "*") + " ");
+//     },
+//     ordered_list(state, node) {
+//       let start = node.attrs.order || 1;
+//       let maxW = String(start + node.childCount - 1).length;
+//       let space = state.repeat(" ", maxW + 2);
+//       state.renderList(node, space, (i) => {
+//         let nStr = String(start + i);
+//         return state.repeat(" ", maxW - nStr.length) + nStr + ". ";
+//       });
+//     },
+//     list_item(state, node) {
+//       state.renderContent(node);
+//     },
+//     paragraph(state, node) {
+//       state.renderInline(node);
+//       state.closeBlock(node);
+//     },
+//     image(state, node) {
+//       state.write(
+//         "![" +
+//           state.esc(node.attrs.alt || "") +
+//           "](" +
+//           state.esc(node.attrs.src) +
+//           (node.attrs.title ? " " + state.quote(node.attrs.title) : "") +
+//           ")"
+//       );
+//     },
+//     hard_break(state, node, parent, index) {
+//       for (let i = index + 1; i < parent.childCount; i++)
+//         if (parent.child(i).type !== node.type) {
+//           state.write("\\\n");
+//           return;
+//         }
+//     },
+//     text(state, node) {
+//       state.text(node.text ?? "");
+//     },
+//   },
+//   {
+//     em: {
+//       open: "*",
+//       close: "*",
+//       mixable: true,
+//       expelEnclosingWhitespace: true,
+//     },
+//     strike: {
+//       open: "~~",
+//       close: "~~",
+//       mixable: true,
+//       expelEnclosingWhitespace: true,
+//     },
+//     strong: {
+//       open: "**",
+//       close: "**",
+//       mixable: true,
+//       expelEnclosingWhitespace: true,
+//     },
+//     link: {
+//       open(_state, mark, parent, index) {
+//         return isPlainURL(mark, parent, index, 1) ? "<" : "[";
+//       },
+//       close(state, mark, parent, index) {
+//         return isPlainURL(mark, parent, index, -1)
+//           ? ">"
+//           : "](" +
+//               state.esc(mark.attrs.href) +
+//               (mark.attrs.title ? " " + state.quote(mark.attrs.title) : "") +
+//               ")";
+//       },
+//     },
+//     code: {
+//       open(_state, _mark, parent, index) {
+//         return backticksFor(parent.child(index), -1);
+//       },
+//       close(_state, _mark, parent, index) {
+//         return backticksFor(parent.child(index - 1), 1);
+//       },
+//       escape: false,
+//     },
+//   }
+// );
+
+function backticksFor(node, side) {
+  let ticks = /`+/g,
+    m,
+    len = 0;
+  if (node.isText)
+    while ((m = ticks.exec(node.text))) len = Math.max(len, m[0].length);
+  let result = len > 0 && side > 0 ? " `" : "`";
+  for (let i = 0; i < len; i++) result += "`";
+  if (len > 0 && side < 0) result += " ";
+  return result;
+}
+
+function isPlainURL(link, parent, index, side) {
+  if (link.attrs.title || !/^\w+:/.test(link.attrs.href)) return false;
+  let content = parent.child(index + (side < 0 ? -1 : 0));
+  if (
+    !content.isText ||
+    content.text != link.attrs.href ||
+    content.marks[content.marks.length - 1] != link
+  )
+    return false;
+  if (index == (side < 0 ? 1 : parent.childCount - 1)) return true;
+  let next = parent.child(index + (side < 0 ? -2 : 1));
+  return !link.isInSet(next.marks);
+}
 
 const newScopeNodeShapeConfig = {
   width: 600,
@@ -581,7 +718,9 @@ export const createCanvasSlice: StateCreator<MyState, [], [], CanvasSlice> = (
   handleCopy(event) {
     // TODO get selected nodes recursively
     const nodesMap = get().getNodesMap();
+    const resultMap = get().podResults;
     let nodes = Array.from(get().selectedPods).map((id) => nodesMap.get(id)!);
+
     if (nodes.length === 0) return;
     // If a scope is selected, select all its children
     if (nodes.some((n) => n.type === "SCOPE")) {
@@ -616,36 +755,78 @@ export const createCanvasSlice: StateCreator<MyState, [], [], CanvasSlice> = (
     const codeMap = get().getCodeMap();
     const richMap = get().getRichMap();
     const contentMap: Record<string, string> = {};
+    const markdownMap: Record<string, string> = {};
     nodes.forEach((node) => {
       switch (node.type) {
         case "CODE":
           contentMap[node.id] = codeMap.get(node.id)!.toString();
+          console.log(contentMap[node.id], "node.id", node.id);
           break;
         case "RICH":
           contentMap[node.id] = JSON.stringify(
             yxml2json(richMap.get(node.id)!)
           );
+          markdownMap[node.id] = defaultMarkdownSerializer.serialize(
+            yxml2node(richMap.get(node.id)!)
+          );
           break;
       }
     });
-    // TODO get edges
-    // set to clipboard
-    // console.log("set clipboard", nodes[0]);
+
+    const results = nodes.reduce((acc, node) => {
+      if (node.type == "CODE" && resultMap[node.id])
+        acc[node.id] = resultMap[node.id];
+      return acc;
+    }, {});
+
+    const ipynbCells = nodesToCells(nodes, results, contentMap, markdownMap);
+
     event.clipboardData!.setData(
-      "application/json",
+      "application/codepod",
       JSON.stringify({
         type: "pod",
-        nodes: nodes,
+        nodes,
         edges: selectedEdges,
-        contentMap: contentMap,
+        contentMap,
+        resultMap: results,
       })
+    );
+    event.clipboardData!.setData(
+      "application/ipynb",
+      JSON.stringify(ipynbCells)
+    );
+    event.clipboardData!.setData(
+      "application/json",
+      JSON.stringify(ipynbCells)
+    );
+    event.clipboardData!.setData(
+      "text/html",
+      '<pre class="jupyter-nb-cells-json">' +
+        JSON.stringify(
+          nodesToCells(nodes, results, contentMap, markdownMap, false, false)
+        ) +
+        "</pre>"
     );
     event.preventDefault();
   },
   handlePaste(event, position) {
     // 2. get clipboard data
+    console.log("paste");
+
     if (!event.clipboardData) return;
-    const payload = event.clipboardData.getData("application/json");
+
+    console.log(event.clipboardData);
+    console.log(event.clipboardData?.types);
+    for (const type of event.clipboardData.types) {
+      console.log(type);
+      if (type === "application/ipynb") {
+        const content = JSON.parse(event.clipboardData.getData(type));
+        console.log(content);
+      } else {
+        console.log(event.clipboardData.getData(type));
+      }
+    }
+    const payload = event.clipboardData.getData("application/codepod");
     if (!payload) {
       console.warn("No payload");
       return;
@@ -655,12 +836,14 @@ export const createCanvasSlice: StateCreator<MyState, [], [], CanvasSlice> = (
     const oldnodes = data.nodes as Node[];
     const oldedges = data.edges as Edge[];
     const contentMap = data.contentMap as Record<string, string>;
+    const results = data.resultMap ?? {};
 
     // 3. construct new nodes
     const nodesMap = get().getNodesMap();
     const edgesMap = get().getEdgesMap();
     const codeMap = get().getCodeMap();
     const richMap = get().getRichMap();
+    const addPodResult = get().addPodResult;
 
     // 1. create new ids
     const old2newIdMap = new Map<string, string>();
@@ -689,6 +872,8 @@ export const createCanvasSlice: StateCreator<MyState, [], [], CanvasSlice> = (
         case "CODE":
           const ytext = new Y.Text(contentMap[n.id]);
           codeMap.set(id, ytext);
+          console.log(results[n.id], results);
+          addPodResult(id, results[n.id]);
           break;
         case "RICH":
           // const yxml = richMap.get(n.id)!.clone();
@@ -714,6 +899,8 @@ export const createCanvasSlice: StateCreator<MyState, [], [], CanvasSlice> = (
       };
       return newNode;
     });
+
+    console.log(newnodes);
 
     const newedges = oldedges.map((e) => {
       const newSource = old2newIdMap.get(e.source)!;
